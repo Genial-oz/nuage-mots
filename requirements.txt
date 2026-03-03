@@ -1,0 +1,7 @@
+streamlit
+pandas
+wordcloud
+opencv-python-headless
+plotly
+openpyxl
+matplotlib
