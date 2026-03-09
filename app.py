@@ -9,7 +9,7 @@ import os
 import plotly.express as px
 import re
 import imageio
-from PIL import Image, ImageDraw, ImageFont # Ajout de ImageFont
+from PIL import Image, ImageDraw, ImageFont 
 # [ANCRE_FIN_IMPORTS]
 
 # Configuration de la page
@@ -22,28 +22,45 @@ if 'manual_stopwords' not in st.session_state:
 # --- LISTE DE NETTOYAGE FRANÇAIS ---
 STOPWORDS_FR = {"le", "la", "les", "du", "des", "de", "un", "une", "et", "est", "sont", "pour", "dans", "avec", "sur", "plus", "fait", "tout", "tous", "cette", "ces", "mon", "ton", "son", "notre", "votre", "leur", "aux", "pas", "plus", "très", "donc", "mais", "car", "chez", "être", "avoir", "faire", "nous", "vous", "ils", "elles", "que", "qui", "quoi", "dont", "où", "par", "pour", "dans", "ce", "ci", "été", "étée", "était", "étaient", "grâce", "grace", "selon", "entre", "lors", "ceux", "celles", "chaque", "certains", "certaines", "après", "avant", "depuis", "durant", "pendant", "environ", "presque", "toujours", "souvent", "parfois", "jamais", "année", "annuel", "mensuel", "période", "actuel", "suite", "cadre", "effet", "également", "ainsi", "alors", "encore", "déjà", "enfin", "notamment", "particulièrement", "assez", "beaucoup", "autre", "autres", "comme", "quand", "si", "bien", "peut", "peuvent", "doit", "doivent", "aussi"}
 
-# --- FONCTION POUR GÉNÉRER DES FORMES ---
+# --- FONCTION POUR GÉNÉRER DES FORMES (Version Sécurisée pour le Texte) ---
 def get_shape_mask(shape_name, text_for_mask=""):
     size = (1000, 1000)
     img = Image.new("L", size, 255) 
     draw = ImageDraw.Draw(img)
     
     if shape_name == "Texte":
+        text_to_draw = text_for_mask if text_for_mask else "ABC"
         font = None
-        # On cherche une police très grasse (Impact ou Bold) pour bien fermer les lettres
-        for font_path in ["impact.ttf", "arialbd.ttf", "DejaVuSans-Bold.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"]:
+        # On commence avec une taille de police très grande
+        font_size = 400 
+        
+        # Chemins de polices compatibles Windows/Linux
+        font_paths = ["impact.ttf", "arialbd.ttf", "DejaVuSans-Bold.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"]
+        
+        # Ajustement dynamique de la taille pour que ça ne dépasse jamais
+        for path in font_paths:
             try:
-                font = ImageFont.truetype(font_path, 350)
+                temp_font = ImageFont.truetype(path, font_size)
+                bbox = draw.textbbox((0, 0), text_to_draw, font=temp_font)
+                w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+                
+                # Si le texte est trop large pour le cadre (avec une marge de 100px), on réduit
+                while (w > size[0] - 100 or h > size[1] - 100) and font_size > 50:
+                    font_size -= 20
+                    temp_font = ImageFont.truetype(path, font_size)
+                    bbox = draw.textbbox((0, 0), text_to_draw, font=temp_font)
+                    w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+                
+                font = temp_font
                 break
             except:
                 continue
         
         if font is None:
             font = ImageFont.load_default()
+            bbox = draw.textbbox((0, 0), text_to_draw, font=font)
+            w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
             
-        text_to_draw = text_for_mask if text_for_mask else "ABC"
-        bbox = draw.textbbox((0, 0), text_to_draw, font=font)
-        w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
         draw.text(((size[0]-w)/2, (size[1]-h)/2), text_to_draw, font=font, fill=0)
         
     elif shape_name == "Cercle":
@@ -151,7 +168,6 @@ if uploaded_file:
             
         bg_col = st.color_picker("Couleur de fond", "#ffffff")
         
-        # --- NOUVELLE FONCTIONNALITÉ : ACTIVATION DES BORDURES ---
         st.subheader("📐 Options de bordures")
         use_border = st.checkbox("Afficher les bordures de la forme", value=True)
         
@@ -160,7 +176,7 @@ if uploaded_file:
             contour_col = st.color_picker("Couleur du contour", "#000000")
         else:
             contour_w = 0
-            contour_col = bg_col # Couleur neutre si désactivé
+            contour_col = bg_col
 
         st.header("🎞️ Paramètres Vidéo")
         fps = st.slider("Vitesse (FPS)", 5, 30, 15)
