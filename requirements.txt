@@ -3,8 +3,8 @@ pandas
 wordcloud
 matplotlib
 numpy
-opencv-python-headless
 imageio
 imageio-ffmpeg
 openpyxl
 plotly
+Pillow
