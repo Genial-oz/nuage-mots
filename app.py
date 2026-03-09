@@ -9,6 +9,7 @@ import cv2
 import os
 import plotly.express as px
 import re
+import time # Ajouté pour le cache
 # [ANCRE_FIN_IMPORTS]
 
 # Configuration de la page
@@ -18,7 +19,7 @@ st.set_page_config(page_title="Nuage de mots", layout="wide")
 if 'manual_stopwords' not in st.session_state:
     st.session_state.manual_stopwords = set()
 
-# --- LISTE DE NETTOYAGE FRANÇAIS (Stopwords de base) ---
+# --- LISTE DE NETTOYAGE FRANÇAIS ---
 STOPWORDS_FR = {
     "le", "la", "les", "du", "des", "de", "un", "une", "et", "est", "sont", "pour", "dans", "avec", 
     "sur", "plus", "fait", "tout", "tous", "cette", "ces", "mon", "ton", "son", "notre", "votre", 
@@ -87,7 +88,7 @@ if uploaded_file:
     full_text = re.sub(r'[^\w\s]', ' ', full_text)
 
     st.subheader("📊 Analyse des fréquences")
-    top_n = st.number_input("Nombre de mots à afficher dans le Top :", 5, 100, 10)
+    top_n = st.number_input("Nombre de mots à afficher :", 5, 100, 10)
     
     temp_wc = WordCloud(stopwords=FINAL_STOPWORDS, min_word_length=4).process_text(full_text)
     sorted_freq = sorted(temp_wc.items(), key=lambda x: x[1], reverse=True)[:top_n]
@@ -96,7 +97,7 @@ if uploaded_file:
     for i, (word, count) in enumerate(sorted_freq):
         with cols[i % 5]:
             st.markdown(f"**{word}** ({count})")
-            if st.button(f"Exclure", key=f"btn_{word}", help=f"Bannir '{word}'"):
+            if st.button(f"Exclure", key=f"btn_{word}"):
                 st.session_state.manual_stopwords.add(word)
                 st.rerun()
 
@@ -106,80 +107,49 @@ if uploaded_file:
     with col_btn1: btn_static = st.button("🚀 Générer Vue Fixe")
     with col_btn2: btn_video = st.button("🎬 Créer l'Animation")
 
-    # Barre latérale pour les réglages
     with st.sidebar:
-        st.header("🎨 Réglages Visuels")
-        max_w = st.slider("Nombre max de mots dans le nuage", 10, 150, 50)
-        
-        palette = st.selectbox("Palette de couleurs", ["viridis", "plasma", "magma", "coolwarm", "Spectral"])
-        
-        with st.expander("❓ Aide sur les palettes"):
-            st.markdown("""
-            - **Viridis** : Professionnel (Violet ➔ Vert ➔ Jaune). Très lisible.
-            - **Plasma** : Dynamique (Bleu ➔ Rose ➔ Jaune).
-            - **Magma** : Contrasté (Noir ➔ Rouge ➔ Blanc).
-            - **Coolwarm** : Équilibré (Bleu ➔ Gris ➔ Rouge).
-            - **Spectral** : Arc-en-ciel (Toutes les couleurs).
-            """)
-            
-        bg_col = st.color_picker("Couleur de fond", "#ffffff")
-        
-        st.header("🎞️ Paramètres Vidéo")
-        fps = st.slider("Vitesse (FPS)", 5, 30, 15)
-        pause_finale = st.slider("Pause finale (sec)", 1, 15, 5)
+        st.header("🎨 Réglages")
+        max_w = st.slider("Mots max", 10, 150, 50)
+        palette = st.selectbox("Palette", ["viridis", "plasma", "magma", "coolwarm", "Spectral"])
+        bg_col = st.color_picker("Fond", "#ffffff")
+        fps = st.slider("FPS", 5, 30, 15)
+        pause_f = st.slider("Pause finale", 1, 15, 5)
 
     if btn_static:
-        wc = WordCloud(
-            background_color=bg_col, max_words=max_w, colormap=palette, 
-            width=1200, height=600, stopwords=FINAL_STOPWORDS,
-            min_word_length=4, collocations=True 
-        ).generate(full_text)
-        
-        tab1, tab2 = st.tabs(["🖼️ Image Fixe", "📈 Graphique"])
-        with tab1:
-            fig, ax = plt.subplots(figsize=(12, 6))
-            ax.imshow(wc, interpolation='bilinear')
-            ax.axis("off")
-            st.pyplot(fig)
-            
-            buf = io.BytesIO()
-            fig.savefig(buf, format="png")
-            st.download_button("📥 Télécharger l'image PNG", buf.getvalue(), "nuage_mots.png", "image/png")
-
-        with tab2:
-            df_plot = pd.DataFrame(list(wc.words_.items()), columns=['Mot', 'Importance']).head(max_w)
-            st.plotly_chart(px.bar(df_plot, x='Importance', y='Mot', orientation='h', color='Importance', color_continuous_scale=palette))
+        wc = WordCloud(background_color=bg_col, max_words=max_w, colormap=palette, width=1200, height=600, stopwords=FINAL_STOPWORDS, min_word_length=4).generate(full_text)
+        fig, ax = plt.subplots(figsize=(12, 6))
+        ax.imshow(wc, interpolation='bilinear')
+        ax.axis("off")
+        st.pyplot(fig)
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png")
+        st.download_button("📥 Télécharger PNG", buf.getvalue(), "nuage.png", "image/png")
 
     if btn_video:
         with st.spinner("🎬 Compilation vidéo..."):
             proc_tags = WordCloud(stopwords=FINAL_STOPWORDS, min_word_length=4).process_text(full_text)
             sorted_words = sorted(proc_tags.items(), key=lambda x: x[1], reverse=True)[:max_w]
             
-            video_filename = "animation_custom.mp4"
+            video_filename = "temp_video.mp4"
+            # Codec universel
             fourcc = cv2.VideoWriter_fourcc(*'avc1') 
             video_out = cv2.VideoWriter(video_filename, fourcc, fps, (1280, 720))
             
             words_to_show = []
             for word, freq in sorted_words:
                 words_to_show.append(word)
-                wc_frame = WordCloud(background_color=bg_col, max_words=max_w, colormap=palette, 
-                                     width=1280, height=720, stopwords=FINAL_STOPWORDS, 
-                                     min_word_length=4).generate(" ".join(words_to_show))
+                wc_frame = WordCloud(background_color=bg_col, max_words=max_w, colormap=palette, width=1280, height=720, stopwords=FINAL_STOPWORDS, min_word_length=4).generate(" ".join(words_to_show))
                 frame = cv2.cvtColor(np.array(wc_frame.to_image()), cv2.COLOR_RGB2BGR)
                 for _ in range(3): video_out.write(frame)
             
-            for _ in range(fps * pause_finale): video_out.write(frame)
+            for _ in range(fps * pause_f): video_out.write(frame)
             video_out.release()
             
-            # --- MODIFICATION POUR LECTURE CLOUD ---
+            # --- LECTURE SECURISEE POUR LE CLOUD ---
             if os.path.exists(video_filename):
                 with open(video_filename, "rb") as f:
                     video_bytes = f.read()
-                
-                # Affichage direct à l'écran via les bytes
                 st.video(video_bytes)
-                
-                # Téléchargement via les bytes
-                st.download_button("📥 Télécharger la vidéo", video_bytes, "nuage_mots_anime.mp4")
+                st.download_button("📥 Télécharger la vidéo", video_bytes, "nuage_anime.mp4")
 else:
-    st.info("👋 Bienvenue ! Veuillez charger votre fichier Excel.")
+    st.info("👋 Bonjour ! Veuillez charger votre fichier Excel.")
