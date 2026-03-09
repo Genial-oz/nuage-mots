@@ -5,10 +5,10 @@ from wordcloud import WordCloud, STOPWORDS
 import matplotlib.pyplot as plt
 import io
 import numpy as np
-import cv2 
 import os
 import plotly.express as px
 import re
+import imageio  # Remplacement de cv2 pour la compilation vidéo
 # [ANCRE_FIN_IMPORTS]
 
 # Configuration de la page
@@ -118,43 +118,37 @@ if uploaded_file:
         st.pyplot(fig)
 
     if btn_video:
-        with st.spinner("🎬 Génération de l'animation en cours..."):
+        with st.spinner("🎬 Génération de l'animation optimisée pour le Web..."):
             proc_tags = WordCloud(stopwords=FINAL_STOPWORDS, min_word_length=4).process_text(full_text)
             sorted_words = sorted(proc_tags.items(), key=lambda x: x[1], reverse=True)[:max_w]
             
-            # Utilisation de mp4v (plus robuste à la création)
             video_filename = "animation.mp4"
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v') 
-            video_out = cv2.VideoWriter(video_filename, fourcc, fps, (1280, 720))
+            frames = []
             
             words_to_show = []
-            last_frame = None
             for word, freq in sorted_words:
                 words_to_show.append(word)
                 wc_frame = WordCloud(background_color=bg_col, max_words=max_w, colormap=palette, 
                                      width=1280, height=720, stopwords=FINAL_STOPWORDS, 
                                      min_word_length=4).generate(" ".join(words_to_show))
                 
-                # Conversion propre Image -> Array -> BGR pour OpenCV
-                frame = cv2.cvtColor(np.array(wc_frame.to_image()), cv2.COLOR_RGB2BGR)
-                for _ in range(3): # Répéter l'image pour fluidité
-                    video_out.write(frame)
-                last_frame = frame
+                # Convertir WordCloud en tableau numpy
+                frame = np.array(wc_frame.to_image())
+                # Ajouter 3 fois l'image pour ralentir l'apparition
+                for _ in range(3):
+                    frames.append(frame)
             
-            # Pause finale
-            if last_frame is not None:
-                for _ in range(fps * pause_f):
-                    video_out.write(last_frame)
+            # Ajouter la pause finale
+            for _ in range(int(fps * pause_f)):
+                frames.append(frames[-1])
             
-            video_out.release()
+            # Sauvegarde avec imageio (utilise ffmpeg pour encoder proprement en H264)
+            imageio.mimsave(video_filename, frames, fps=fps, codec='libx264', quality=8)
             
-            # Vérification et Affichage
             if os.path.exists(video_filename):
                 with open(video_filename, "rb") as f:
                     v_bytes = f.read()
-                st.video(v_bytes) # L'affichage binaire aide Streamlit Cloud
+                st.video(v_bytes)
                 st.download_button("📥 Télécharger la vidéo", v_bytes, "animation.mp4")
-            else:
-                st.error("Erreur lors de la création du fichier vidéo.")
 else:
     st.info("👋 Veuillez charger votre fichier Excel principal.")
