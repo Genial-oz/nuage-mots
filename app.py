@@ -156,7 +156,6 @@ if uploaded_file:
             sorted_words = sorted(proc_tags.items(), key=lambda x: x[1], reverse=True)[:max_w]
             
             video_filename = "animation_custom.mp4"
-            # CHANGEMENT ICI : Utilisation du codec avc1 (H.264) pour la lecture web
             fourcc = cv2.VideoWriter_fourcc(*'avc1') 
             video_out = cv2.VideoWriter(video_filename, fourcc, fps, (1280, 720))
             
@@ -172,10 +171,15 @@ if uploaded_file:
             for _ in range(fps * pause_finale): video_out.write(frame)
             video_out.release()
             
-            # Affichage direct à l'écran
-            st.video(video_filename)
-            
-            with open(video_filename, "rb") as f:
-                st.download_button("📥 Télécharger la vidéo", f, "nuage_mots_anime.mp4")
+            # --- MODIFICATION POUR LECTURE CLOUD ---
+            if os.path.exists(video_filename):
+                with open(video_filename, "rb") as f:
+                    video_bytes = f.read()
+                
+                # Affichage direct à l'écran via les bytes
+                st.video(video_bytes)
+                
+                # Téléchargement via les bytes
+                st.download_button("📥 Télécharger la vidéo", video_bytes, "nuage_mots_anime.mp4")
 else:
     st.info("👋 Bienvenue ! Veuillez charger votre fichier Excel.")
