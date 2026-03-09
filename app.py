@@ -4,159 +4,124 @@ import pandas as pd
 from wordcloud import WordCloud, STOPWORDS
 import matplotlib.pyplot as plt
 import io
-import random
 import numpy as np
-import cv2  # pip install opencv-python
+import cv2 
 import os
 import plotly.express as px
+import re
 # [ANCRE_FIN_IMPORTS]
 
-# Configuration de la page
-st.set_page_config(page_title="WordCloud Master Pro", layout="wide")
+st.set_page_config(page_title="Nuage de mots", layout="wide")
+
+# --- LISTE DE NETTOYAGE FRANÇAIS (Stopwords) ---
+STOPWORDS_FR = set([
+    "le", "la", "les", "du", "des", "de", "un", "une", "et", "est", "sont", "pour", "dans", "avec", 
+    "sur", "plus", "fait", "tout", "tous", "cette", "ces", "mon", "ton", "son", "notre", "votre", 
+    "leur", "aux", "pas", "plus", "très", "donc", "mais", "car", "chez", "être", "avoir", "faire",
+    "nous", "vous", "ils", "elles", "que", "qui", "quoi", "dont", "où", "par", "pour", "dans", "ce", "ci",
+    "une", "les", "des", "été", "être", "avoir", "plus", "avec", "dans"
+])
+ALL_STOPWORDS = STOPWORDS.union(STOPWORDS_FR)
 
 # --- STYLE CSS ---
 st.markdown("""
     <style>
-    .main { background-color: #f8f9fa; }
     .stButton>button { width: 100%; border-radius: 8px; font-weight: bold; background-color: #007bff; color: white; height: 3em; }
-    .stDownloadButton>button { background-color: #28a745 !important; color: white !important; width: 100%; }
+    .stDownloadButton>button { background-color: #28a745 !important; color: white !important; }
     </style>
     """, unsafe_allow_html=True)
 
-st.title("☁️ WordCloud Master Pro")
-st.subheader("Analyse de texte, Visualisation et Animation Vidéo")
+st.title("☁️ Nuage de mots")
 
-# --- SECTION 0 : GÉNÉRATEUR DE TEST ---
-# [ANCRE_DEBUT_TEST_EXCEL]
-with st.expander("🛠️ Générer un fichier Excel de test (500 lignes)"):
+# --- GÉNÉRATEUR DE TEST ---
+with st.expander("🛠️ Générer un fichier de test (Vérification du filtrage strict)"):
     def get_test_excel():
-        mots_pondérés = (["Python"] * 150 + ["Data"] * 110 + ["IA"] * 80 + 
-                         ["Streamlit"] * 60 + ["Analyse"] * 40 + ["Vidéo"] * 40 +
-                         ["Code"] * 20 + ["Dashboard"] * 10)
-        random.shuffle(mots_pondérés)
-        df_test = pd.DataFrame(mots_pondérés, columns=["Texte_A_Analyser"])
+        phrases = [
+            "L'emploi des agents est une priorité pour le service des ressources humaines",
+            "La formation sur la sécurité est obligatoire pour tous les nouveaux arrivants",
+            "Le rapport social unique présente des données sur les effectifs et la santé",
+            "L'absentéisme est en baisse grâce à la prévention sur les postes de travail"
+        ] * 40 
+        df_test = pd.DataFrame(phrases, columns=["Texte_A_Analyser"])
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df_test.to_excel(writer, index=False)
         return output.getvalue()
 
-    st.download_button(
-        label="📥 Télécharger le fichier de test.xlsx",
-        data=get_test_excel(),
-        file_name="test_wordcloud.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-# [ANCRE_FIN_TEST_EXCEL]
+    st.download_button("📥 Télécharger test_rsu_propre.xlsx", get_test_excel(), "test_rsu.xlsx")
 
 st.divider()
 
-# --- SECTION 1 : BARRE LATÉRALE (RÉGLAGES) ---
-# [ANCRE_DEBUT_SIDEBAR]
+# --- SIDEBAR ---
 with st.sidebar:
     st.header("🎨 Réglages Visuels")
-    max_w = st.slider("Nombre de mots", 10, 150, 50)
+    max_w = st.slider("Nombre max de mots", 10, 150, 50)
     palette = st.selectbox("Palette de couleurs", ["viridis", "plasma", "magma", "coolwarm", "Spectral"])
     bg_col = st.color_picker("Couleur de fond", "#ffffff")
     
     st.header("🎞️ Paramètres Vidéo")
-    fps = st.slider("Images par seconde (Vitesse)", 5, 30, 15)
-    pause_finale = st.slider("Pause sur l'image finale (sec)", 1, 10, 5)
-    st.info("Note : La vidéo sera générée en résolution HD (1280x720).")
-# [ANCRE_FIN_SIDEBAR]
+    fps = st.slider("Vitesse (FPS)", 5, 30, 15)
+    pause_finale = st.slider("Pause finale (sec)", 1, 15, 5)
+    st.warning("⚠️ Seuls les mots de 4 lettres ou plus seront affichés.")
 
-# --- SECTION 2 : IMPORT ET ANALYSE ---
-uploaded_file = st.file_uploader("📂 Étape 1 : Chargez votre fichier Excel", type=["xlsx"])
+# --- TRAITEMENT ---
+uploaded_file = st.file_uploader("📂 Chargez votre fichier Excel (.xlsx)", type=["xlsx"])
 
 if uploaded_file:
     df = pd.read_excel(uploaded_file)
+    target_column = st.selectbox("Sélectionnez la colonne à analyser :", df.columns)
     
-    col_sel, col_btns = st.columns([2, 2])
+    # --- NETTOYAGE AVANCÉ ---
+    text_list = df[target_column].dropna().astype(str).tolist()
+    full_text = " ".join(text_list).lower()
     
-    with col_sel:
-        target_column = st.selectbox("Étape 2 : Colonne à analyser", df.columns)
+    # 1. On remplace les l', d', j', n' par un espace pour isoler le mot suivant
+    full_text = re.sub(r"\b[ldjns]['’]", " ", full_text)
     
-    # Préparation du texte pour les moteurs
-    text_data = df[target_column].dropna().astype(str).tolist()
-    full_text = " ".join(text_data)
+    # 2. On supprime la ponctuation
+    full_text = re.sub(r'[^\w\s]', ' ', full_text)
 
-    with col_btns:
-        st.write("##") # Calage
-        c1, c2 = st.columns(2)
-        with c1:
-            generate_static = st.button("🚀 Vue Fixe / Data")
-        with c2:
-            generate_video = st.button("🎬 Créer la Vidéo")
+    col1, col2 = st.columns(2)
+    with col1: btn_static = st.button("🚀 Vue Fixe & Data")
+    with col2: btn_video = st.button("🎬 Créer l'Animation")
 
-    # --- PARTIE A : AFFICHAGE FIXE ET INTERACTIF ---
-    if generate_static:
-        wc_static = WordCloud(background_color=bg_col, max_words=max_w, colormap=palette, 
-                              width=1200, height=600, stopwords=STOPWORDS).generate(full_text)
+    if btn_static:
+        # min_word_length=4 est la clé ici
+        wc = WordCloud(
+            background_color=bg_col, max_words=max_w, colormap=palette, 
+            width=1200, height=600, stopwords=ALL_STOPWORDS,
+            min_word_length=4, collocations=True 
+        ).generate(full_text)
         
-        tab1, tab2 = st.tabs(["🖼️ Image Fixe", "📊 Analyse Interactive (Plotly)"])
-        
+        tab1, tab2 = st.tabs(["🖼️ Image Fixe", "📊 Analyse Interactive"])
         with tab1:
             fig, ax = plt.subplots(figsize=(12, 6))
-            ax.imshow(wc_static, interpolation='bilinear')
+            ax.imshow(wc, interpolation='bilinear')
             ax.axis("off")
             st.pyplot(fig)
-            
-            # Export PNG
-            buf = io.BytesIO()
-            fig.savefig(buf, format="png")
-            st.download_button("📥 Télécharger le PNG", buf.getvalue(), "nuage.png", "image/png")
-
         with tab2:
-            # Graphique interactif des fréquences
-            df_plot = pd.DataFrame(list(wc_static.words_.items()), columns=['Mot', 'Score']).head(max_w)
-            df_plot['Importance (%)'] = (df_plot['Score'] * 100).round(2)
-            
-            fig_p = px.bar(df_plot, x='Importance (%)', y='Mot', orientation='h', 
-                           color='Importance (%)', color_continuous_scale=palette,
-                           title="Fréquence relative des mots")
-            fig_p.update_layout(yaxis={'categoryorder':'total ascending'}, height=600)
-            st.plotly_chart(fig_p, use_container_width=True)
+            df_plot = pd.DataFrame(list(wc.words_.items()), columns=['Mot', 'Importance']).head(max_w)
+            st.plotly_chart(px.bar(df_plot, x='Importance', y='Mot', orientation='h', color='Importance', color_continuous_scale=palette))
 
-    # --- PARTIE B : GÉNÉRATION DE L'ANIMATION VIDÉO ---
-    if generate_video:
-        with st.spinner("🎬 Compilation de la vidéo en cours..."):
-            # Calcul des mots clés par ordre d'importance
-            words_dict = WordCloud().process_text(full_text)
-            sorted_words = sorted(words_dict.items(), key=lambda x: x[1], reverse=True)[:max_w]
+    if btn_video:
+        with st.spinner("🎬 Compilation de la vidéo HD..."):
+            # Application du filtrage strict aussi pour la vidéo
+            proc_tags = WordCloud(stopwords=ALL_STOPWORDS, min_word_length=4).process_text(full_text)
+            sorted_words = sorted(proc_tags.items(), key=lambda x: x[1], reverse=True)[:max_w]
             
-            video_filename = "mon_nuage_anime.mp4"
-            w, h = 1280, 720
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-            video_out = cv2.VideoWriter(video_filename, fourcc, fps, (w, h))
+            video_filename = "animation_propre.mp4"
+            video_out = cv2.VideoWriter(video_filename, cv2.VideoWriter_fourcc(*'mp4v'), fps, (1280, 720))
 
-            # 1. Animation : Apparition progressive
-            words_to_draw = []
+            words_to_show = []
             for word, freq in sorted_words:
-                words_to_draw.append(word)
-                temp_text = " ".join(words_to_draw)
-                
-                # Génération de la frame
-                wc_frame = WordCloud(background_color=bg_col, max_words=max_w, 
-                                     colormap=palette, width=w, height=h).generate(temp_text)
-                
-                # Conversion Image -> OpenCV
-                frame = np.array(wc_frame.to_image())
-                frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-                
-                # On écrit chaque frame 3 fois pour fluidifier l'apparition
-                for _ in range(3):
-                    video_out.write(frame)
+                words_to_show.append(word)
+                wc_frame = WordCloud(background_color=bg_col, max_words=max_w, colormap=palette, 
+                                     width=1280, height=720, stopwords=ALL_STOPWORDS, min_word_length=4).generate(" ".join(words_to_show))
+                frame = cv2.cvtColor(np.array(wc_frame.to_image()), cv2.COLOR_RGB2BGR)
+                for _ in range(3): video_out.write(frame)
 
-            # 2. Final : Pause sur le nuage complet
-            for _ in range(fps * pause_finale):
-                video_out.write(frame)
-            
+            for _ in range(fps * pause_finale): video_out.write(frame)
             video_out.release()
-
-            # Résultat
-            if os.path.exists(video_filename):
-                st.success(f"✅ Vidéo générée avec succès !")
-                with open(video_filename, "rb") as vf:
-                    st.video(vf)
-                    st.download_button("📥 Télécharger la vidéo MP4", vf, file_name="animation_nuage.mp4")
+            st.video(video_filename)
 else:
-    st.info("☝️ Commencez par charger un fichier Excel ou générez-en un de test ci-dessus.")
+    st.info("👋 Chargez un fichier Excel pour commencer l'analyse sans articles.")
