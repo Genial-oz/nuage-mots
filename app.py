@@ -22,7 +22,7 @@ if 'manual_stopwords' not in st.session_state:
 # --- LISTE DE NETTOYAGE FRANÇAIS ---
 STOPWORDS_FR = {"le", "la", "les", "du", "des", "de", "un", "une", "et", "est", "sont", "pour", "dans", "avec", "sur", "plus", "fait", "tout", "tous", "cette", "ces", "mon", "ton", "son", "notre", "votre", "leur", "aux", "pas", "plus", "très", "donc", "mais", "car", "chez", "être", "avoir", "faire", "nous", "vous", "ils", "elles", "que", "qui", "quoi", "dont", "où", "par", "pour", "dans", "ce", "ci", "été", "étée", "était", "étaient", "grâce", "grace", "selon", "entre", "lors", "ceux", "celles", "chaque", "certains", "certaines", "après", "avant", "depuis", "durant", "pendant", "environ", "presque", "toujours", "souvent", "parfois", "jamais", "année", "annuel", "mensuel", "période", "actuel", "suite", "cadre", "effet", "également", "ainsi", "alors", "encore", "déjà", "enfin", "notamment", "particulièrement", "assez", "beaucoup", "autre", "autres", "comme", "quand", "si", "bien", "peut", "peuvent", "doit", "doivent", "aussi"}
 
-# --- FONCTION POUR GÉNÉRER DES FORMES (Version Sécurisée pour le Texte) ---
+# --- FONCTION POUR GÉNÉRER DES FORMES ---
 def get_shape_mask(shape_name, text_for_mask=""):
     size = (1000, 1000)
     img = Image.new("L", size, 255) 
@@ -31,22 +31,19 @@ def get_shape_mask(shape_name, text_for_mask=""):
     if shape_name == "Texte":
         text_to_draw = text_for_mask if text_for_mask else "ABC"
         font = None
-        # On commence avec une taille de police très grande
-        font_size = 400 
+        font_size = 900 # On commence très grand pour maximiser l'espace
         
-        # Chemins de polices compatibles Windows/Linux
         font_paths = ["impact.ttf", "arialbd.ttf", "DejaVuSans-Bold.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"]
         
-        # Ajustement dynamique de la taille pour que ça ne dépasse jamais
         for path in font_paths:
             try:
                 temp_font = ImageFont.truetype(path, font_size)
+                # On ajuste pour que le texte remplisse le cadre avec une marge minimale de 20px
                 bbox = draw.textbbox((0, 0), text_to_draw, font=temp_font)
                 w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
                 
-                # Si le texte est trop large pour le cadre (avec une marge de 100px), on réduit
-                while (w > size[0] - 100 or h > size[1] - 100) and font_size > 50:
-                    font_size -= 20
+                while (w > size[0] - 40 or h > size[1] - 40) and font_size > 50:
+                    font_size -= 10
                     temp_font = ImageFont.truetype(path, font_size)
                     bbox = draw.textbbox((0, 0), text_to_draw, font=temp_font)
                     w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
@@ -64,16 +61,16 @@ def get_shape_mask(shape_name, text_for_mask=""):
         draw.text(((size[0]-w)/2, (size[1]-h)/2), text_to_draw, font=font, fill=0)
         
     elif shape_name == "Cercle":
-        draw.ellipse([50, 50, 950, 950], fill=0)
+        draw.ellipse([20, 20, 980, 980], fill=0)
     elif shape_name == "Carré":
-        draw.rectangle([100, 100, 900, 900], fill=0)
+        draw.rectangle([50, 50, 950, 950], fill=0)
     elif shape_name == "Cœur":
-        draw.polygon([(500, 900), (50, 450), (200, 150), (500, 350), (800, 150), (950, 450)], fill=0)
+        draw.polygon([(500, 950), (20, 450), (150, 50), (500, 300), (850, 50), (980, 450)], fill=0)
     elif shape_name == "Étoile":
-        draw.polygon([(500, 50), (625, 375), (950, 375), (700, 575), (800, 900), (500, 700), (200, 900), (300, 575), (50, 375), (375, 375)], fill=0)
+        draw.polygon([(500, 20), (625, 350), (980, 350), (720, 550), (820, 950), (500, 720), (180, 950), (280, 550), (20, 350), (375, 350)], fill=0)
     elif shape_name == "Bulle":
-        draw.ellipse([100, 100, 900, 750], fill=0)
-        draw.polygon([(300, 700), (150, 950), (450, 740)], fill=0)
+        draw.ellipse([50, 50, 950, 750], fill=0)
+        draw.polygon([(250, 700), (100, 980), (450, 740)], fill=0)
     return np.array(img)
 
 # --- STYLE CSS ---
@@ -160,7 +157,7 @@ if uploaded_file:
         elif shape_choice != "Rectangle":
             custom_mask = get_shape_mask(shape_choice)
 
-        max_w = st.slider("Nombre max de mots", 10, 500, 150)
+        max_w = st.slider("Nombre max de mots", 10, 500, 50) # Par défaut 50
         palette = st.selectbox("Palette de couleurs", ["viridis", "plasma", "magma", "coolwarm", "Spectral"])
         
         with st.expander("❓ Aide sur les palettes"):
@@ -179,7 +176,7 @@ if uploaded_file:
             contour_col = bg_col
 
         st.header("🎞️ Paramètres Vidéo")
-        fps = st.slider("Vitesse (FPS)", 5, 30, 15)
+        fps = st.slider("Vitesse (FPS)", 5, 30, 8) # Par défaut 8
         pause_finale = st.slider("Pause finale (sec)", 1, 15, 5)
 
     col_btn1, col_btn2 = st.columns(2)
@@ -188,18 +185,18 @@ if uploaded_file:
 
     if btn_static:
         wc = WordCloud(background_color=bg_col, max_words=max_w, colormap=palette, 
-                       width=1200, height=800, mask=custom_mask, 
+                       width=1000, height=1000, mask=custom_mask, 
                        stopwords=FINAL_STOPWORDS, min_word_length=4,
                        repeat=True, contour_width=contour_w, contour_color=contour_col).generate(full_text)
         
         tab1, tab2 = st.tabs(["🖼️ Image Fixe", "📈 Graphique"])
         with tab1:
-            fig, ax = plt.subplots(figsize=(12, 8))
+            fig, ax = plt.subplots(figsize=(10, 10))
             ax.imshow(wc, interpolation='bilinear')
             ax.axis("off")
             st.pyplot(fig)
             buf = io.BytesIO()
-            fig.savefig(buf, format="png")
+            fig.savefig(buf, format="png", bbox_inches='tight', pad_inches=0)
             st.download_button("📥 Télécharger PNG", buf.getvalue(), "nuage.png", "image/png")
         with tab2:
             df_plot = pd.DataFrame(list(wc.words_.items()), columns=['Mot', 'Importance']).head(max_w)
