@@ -9,7 +9,7 @@ import os
 import plotly.express as px
 import re
 import imageio
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont # Ajout de ImageFont
 # [ANCRE_FIN_IMPORTS]
 
 # Configuration de la page
@@ -23,21 +23,40 @@ if 'manual_stopwords' not in st.session_state:
 STOPWORDS_FR = {"le", "la", "les", "du", "des", "de", "un", "une", "et", "est", "sont", "pour", "dans", "avec", "sur", "plus", "fait", "tout", "tous", "cette", "ces", "mon", "ton", "son", "notre", "votre", "leur", "aux", "pas", "plus", "très", "donc", "mais", "car", "chez", "être", "avoir", "faire", "nous", "vous", "ils", "elles", "que", "qui", "quoi", "dont", "où", "par", "pour", "dans", "ce", "ci", "été", "étée", "était", "étaient", "grâce", "grace", "selon", "entre", "lors", "ceux", "celles", "chaque", "certains", "certaines", "après", "avant", "depuis", "durant", "pendant", "environ", "presque", "toujours", "souvent", "parfois", "jamais", "année", "annuel", "mensuel", "période", "actuel", "suite", "cadre", "effet", "également", "ainsi", "alors", "encore", "déjà", "enfin", "notamment", "particulièrement", "assez", "beaucoup", "autre", "autres", "comme", "quand", "si", "bien", "peut", "peuvent", "doit", "doivent", "aussi"}
 
 # --- FONCTION POUR GÉNÉRER DES FORMES ---
-def get_shape_mask(shape_name):
-    size = (800, 800)
+def get_shape_mask(shape_name, text_for_mask=""):
+    size = (1000, 1000)
     img = Image.new("L", size, 255) 
     draw = ImageDraw.Draw(img)
-    if shape_name == "Cercle":
-        draw.ellipse([50, 50, 750, 750], fill=0)
+    
+    if shape_name == "Texte":
+        font = None
+        # On cherche une police très grasse (Impact ou Bold) pour bien fermer les lettres
+        for font_path in ["impact.ttf", "arialbd.ttf", "DejaVuSans-Bold.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"]:
+            try:
+                font = ImageFont.truetype(font_path, 350)
+                break
+            except:
+                continue
+        
+        if font is None:
+            font = ImageFont.load_default()
+            
+        text_to_draw = text_for_mask if text_for_mask else "ABC"
+        bbox = draw.textbbox((0, 0), text_to_draw, font=font)
+        w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+        draw.text(((size[0]-w)/2, (size[1]-h)/2), text_to_draw, font=font, fill=0)
+        
+    elif shape_name == "Cercle":
+        draw.ellipse([50, 50, 950, 950], fill=0)
     elif shape_name == "Carré":
-        draw.rectangle([100, 100, 700, 700], fill=0)
+        draw.rectangle([100, 100, 900, 900], fill=0)
     elif shape_name == "Cœur":
-        draw.polygon([(400, 750), (50, 400), (150, 150), (400, 300), (650, 150), (750, 400)], fill=0)
+        draw.polygon([(500, 900), (50, 450), (200, 150), (500, 350), (800, 150), (950, 450)], fill=0)
     elif shape_name == "Étoile":
-        draw.polygon([(400, 50), (500, 300), (750, 300), (550, 450), (650, 750), (400, 600), (150, 750), (250, 450), (50, 300), (300, 300)], fill=0)
+        draw.polygon([(500, 50), (625, 375), (950, 375), (700, 575), (800, 900), (500, 700), (200, 900), (300, 575), (50, 375), (375, 375)], fill=0)
     elif shape_name == "Bulle":
-        draw.ellipse([100, 100, 700, 600], fill=0)
-        draw.polygon([(200, 550), (100, 750), (350, 580)], fill=0)
+        draw.ellipse([100, 100, 900, 750], fill=0)
+        draw.polygon([(300, 700), (150, 950), (450, 740)], fill=0)
     return np.array(img)
 
 # --- STYLE CSS ---
@@ -110,10 +129,13 @@ if uploaded_file:
     # --- RÉGLAGES SIDEBAR ---
     with st.sidebar:
         st.header("🎨 Réglages Visuels")
-        shape_choice = st.selectbox("Forme du nuage", ["Rectangle", "Cercle", "Carré", "Cœur", "Étoile", "Bulle", "Image personnalisée"])
+        shape_choice = st.selectbox("Forme du nuage", ["Rectangle", "Cercle", "Carré", "Cœur", "Étoile", "Bulle", "Texte", "Image personnalisée"])
         
         custom_mask = None
-        if shape_choice == "Image personnalisée":
+        if shape_choice == "Texte":
+            mask_text = st.text_input("Mot(s) pour la forme :", "HELLO").upper()
+            custom_mask = get_shape_mask("Texte", mask_text)
+        elif shape_choice == "Image personnalisée":
             mask_file = st.file_uploader("Image (Noir sur blanc)", type=["png", "jpg", "jpeg"])
             if mask_file:
                 custom_mask = np.array(Image.open(mask_file).convert("L"))
@@ -121,7 +143,7 @@ if uploaded_file:
         elif shape_choice != "Rectangle":
             custom_mask = get_shape_mask(shape_choice)
 
-        max_w = st.slider("Nombre max de mots", 10, 200, 50)
+        max_w = st.slider("Nombre max de mots", 10, 500, 150)
         palette = st.selectbox("Palette de couleurs", ["viridis", "plasma", "magma", "coolwarm", "Spectral"])
         
         with st.expander("❓ Aide sur les palettes"):
@@ -129,6 +151,17 @@ if uploaded_file:
             
         bg_col = st.color_picker("Couleur de fond", "#ffffff")
         
+        # --- NOUVELLE FONCTIONNALITÉ : ACTIVATION DES BORDURES ---
+        st.subheader("📐 Options de bordures")
+        use_border = st.checkbox("Afficher les bordures de la forme", value=True)
+        
+        if use_border:
+            contour_w = st.slider("Épaisseur du contour", 1, 4, 1)
+            contour_col = st.color_picker("Couleur du contour", "#000000")
+        else:
+            contour_w = 0
+            contour_col = bg_col # Couleur neutre si désactivé
+
         st.header("🎞️ Paramètres Vidéo")
         fps = st.slider("Vitesse (FPS)", 5, 30, 15)
         pause_finale = st.slider("Pause finale (sec)", 1, 15, 5)
@@ -140,7 +173,8 @@ if uploaded_file:
     if btn_static:
         wc = WordCloud(background_color=bg_col, max_words=max_w, colormap=palette, 
                        width=1200, height=800, mask=custom_mask, 
-                       stopwords=FINAL_STOPWORDS, min_word_length=4).generate(full_text)
+                       stopwords=FINAL_STOPWORDS, min_word_length=4,
+                       repeat=True, contour_width=contour_w, contour_color=contour_col).generate(full_text)
         
         tab1, tab2 = st.tabs(["🖼️ Image Fixe", "📈 Graphique"])
         with tab1:
@@ -164,13 +198,14 @@ if uploaded_file:
             frames = []
             words_to_show = []
             v_mask = custom_mask
-            v_w, v_h = (800, 800) if v_mask is not None else (1280, 720)
+            v_w, v_h = (1000, 1000) if v_mask is not None else (1280, 720)
 
             for word, _ in sorted_words:
                 words_to_show.append(word)
                 wc_frame = WordCloud(background_color=bg_col, max_words=max_w, colormap=palette, 
                                      width=v_w, height=v_h, mask=v_mask, 
-                                     stopwords=FINAL_STOPWORDS, min_word_length=4).generate(" ".join(words_to_show))
+                                     stopwords=FINAL_STOPWORDS, min_word_length=4,
+                                     repeat=True, contour_width=contour_w, contour_color=contour_col).generate(" ".join(words_to_show))
                 frames.append(np.array(wc_frame.to_image()))
             
             for _ in range(fps * pause_finale): frames.append(frames[-1])
