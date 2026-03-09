@@ -1,7 +1,10 @@
 streamlit
 pandas
 wordcloud
-opencv-python-headless
-plotly
-openpyxl
 matplotlib
+numpy
+opencv-python-headless
+imageio
+imageio-ffmpeg
+openpyxl
+plotly
