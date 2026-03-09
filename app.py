@@ -113,7 +113,6 @@ if uploaded_file:
         
         palette = st.selectbox("Palette de couleurs", ["viridis", "plasma", "magma", "coolwarm", "Spectral"])
         
-        # --- RÉINTÉGRATION DE L'AIDE SUR LES COULEURS ---
         with st.expander("❓ Aide sur les palettes"):
             st.markdown("""
             - **Viridis** : Professionnel (Violet ➔ Vert ➔ Jaune). Très lisible.
@@ -155,8 +154,11 @@ if uploaded_file:
         with st.spinner("🎬 Compilation vidéo..."):
             proc_tags = WordCloud(stopwords=FINAL_STOPWORDS, min_word_length=4).process_text(full_text)
             sorted_words = sorted(proc_tags.items(), key=lambda x: x[1], reverse=True)[:max_w]
+            
             video_filename = "animation_custom.mp4"
-            video_out = cv2.VideoWriter(video_filename, cv2.VideoWriter_fourcc(*'mp4v'), fps, (1280, 720))
+            # CHANGEMENT ICI : Utilisation du codec avc1 (H.264) pour la lecture web
+            fourcc = cv2.VideoWriter_fourcc(*'avc1') 
+            video_out = cv2.VideoWriter(video_filename, fourcc, fps, (1280, 720))
             
             words_to_show = []
             for word, freq in sorted_words:
@@ -169,8 +171,11 @@ if uploaded_file:
             
             for _ in range(fps * pause_finale): video_out.write(frame)
             video_out.release()
+            
+            # Affichage direct à l'écran
             st.video(video_filename)
+            
             with open(video_filename, "rb") as f:
-                st.download_button("📥 Télécharger la vidéo", f, "nuage_anime.mp4")
+                st.download_button("📥 Télécharger la vidéo", f, "nuage_mots_anime.mp4")
 else:
     st.info("👋 Bienvenue ! Veuillez charger votre fichier Excel.")
