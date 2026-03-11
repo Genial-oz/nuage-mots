@@ -247,8 +247,8 @@ with st.sidebar:
 # [ANCRE_FIN_SIDEBAR]
 
 # [ANCRE_DEBUT_DASHBOARD_PRINCIPAL]
-st.title("☁️ Nuage de mots Premium")
-st.markdown("Créez des visualisations textuelles époustouflantes en quelques clics.")
+st.title("☁️ Nuage de mots")
+st.markdown("Créez des visualisations textuelles en quelques clics.")
 
 with st.container():
     uploaded_file = st.file_uploader("📂 Parcourir les fichiers (Excel .xlsx)", type=["xlsx"])
